@@ -1,7 +1,4 @@
-require 'helper'
+require File.expand_path('helper', File.dirname(__FILE__))
 
 class TestDbx < Test::Unit::TestCase
-  should "probably rename this file and start testing for real" do
-    flunk "hey buddy, you should probably rename this file and start testing for real"
-  end
 end

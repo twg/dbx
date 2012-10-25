@@ -1,0 +1,7 @@
+mysql:
+  username: test
+  password: test
+
+postgres:
+  username: test
+  password: test
