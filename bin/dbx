@@ -112,31 +112,49 @@ end
 config['adapter'] ||= 'mysql2'
 
 begin
-  args.each do |arg|
-    case (arg)
-    when 'schema'
-    when 'dump'
-    when 'restore'
-    when 'databases'
-      dbx = DBX.connect(config)
-      databases = dbx.databases
+  command = args.shift
+  
+  case (command)
+  when 'schema'
+    dbx = DBX.connect(config)
     
-      databases.each do |database_name, database|
-        puts database.name
-      end
-    when 'config'
-      puts "Configuration read for environment '#{environment}'"
-      config.each do |key, value|
-        puts "\t#{key}: #{value}"
-      end
-      puts "(From: #{options[:config]})"
-    else
-      show_version
-      puts "Invalid command: #{arg}"
-      exit(-1)
+    if (args.empty?)
+      puts "Usage: dbx schema database [database [...]]"
+      exit(-20)
     end
+    
+    args.each do |database|
+      if (db = dbx.database(database))
+        puts db.create_sql.values
+      end
+    end
+  when 'dump'
+  when 'restore'
+  when 'databases'
+    dbx = DBX.connect(config)
+    databases = dbx.databases
+  
+    databases.each do |database_name, database|
+      puts database.name
+    end
+  when 'config'
+    puts "Configuration read for environment '#{environment}'"
+    config.each do |key, value|
+      puts "\t#{key}: #{value}"
+    end
+    puts "(From: #{options[:config]})"
+  else
+    show_version
+    puts "Invalid command: #{command}"
+    exit(-1)
   end
-rescue Mysql2::Error => e
+rescue SystemExit
+  # Capture and re-raise as this is expected to happen.
+  raise
+rescue Exception => e
   puts "[#{e.class}] #{e}"
+  if (options[:trace])
+    puts e.backtrace
+  end
   exit(-127)
 end

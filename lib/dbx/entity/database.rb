@@ -1,17 +1,31 @@
 class DBX::Entity::Database
   attr_reader :name
   attr_reader :driver
+  attr_reader :schema
   
   def initialize(name, driver = nil)
     @name = name.to_s.dup.freeze
     @driver = driver
   end
   
+  def query(sql)
+    return unless (@driver)
+    
+    _connection = @driver.connection_request
+    _connection.query("USE #{@driver.database_escape(@name)}")
+    
+    result = _connection.query(sql)
+    
+    @driver.connection_release(_connection)
+    
+    result
+  end
+
   def tables
     return unless (@driver)
     
     Hash[
-      @driver.query("SHOW_FULL_TABLES").select do |table_name, table_type|
+      self.query("SHOW FULL TABLES").select do |table_name, table_type|
         table_type == 'BASE TABLE'
       end.collect do |table_name, table_type|
         [
@@ -23,7 +37,28 @@ class DBX::Entity::Database
   end
   
   def table_create_sql(name)
-    @driver and @driver.query("SHOW CREATE TABLE #{table_escape(name)}").to_a[1]
+    return unless (@driver)
+    
+    result = @driver.query("SHOW CREATE TABLE #{@driver.table_escape(name)}")
+    
+    create_info = result.to_a[0]
+    
+    create_info and create_info[1]
+  end
+
+  def tables_create_sql
+    Hash[
+      tables.collect do |table_name, table|
+        [
+          table.name,
+          self.table_create_sql(table.name)
+        ]
+      end
+    ]
+  end
+  
+  def create_sql
+    self.tables_create_sql
   end
   
   def to_s
