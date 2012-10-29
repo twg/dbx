@@ -1,3 +1,142 @@
 #!/usr/bin/env ruby
 
-# ...
+require 'optparse'
+require 'yaml'
+
+$LOAD_PATH << File.expand_path(
+  File.join('..', 'lib'),
+  File.dirname(
+    File.symlink?(__FILE__) ? File.readlink(__FILE__) : __FILE__
+  )
+)
+
+require 'dbx'
+
+# == Support Methods ========================================================
+
+def show_version
+  puts "dbx Version #{DBX.version}"
+end
+
+def find_config(name = 'database.yml')
+  path = Dir.pwd
+  last_path = nil
+  
+  while (path != last_path)
+    config_relative_path = name.match(File::SEPARATOR) ? name : File.join('config', name)
+    
+    config_path = File.expand_path(config_relative_path, path)
+    
+    return config_path if (File.exist?(config_path))
+    
+    last_path = path
+    path = File.expand_path('..', path)
+  end
+end
+
+def read_config(path)
+  YAML.load(File.open(path))
+end
+
+# == Main ===================================================================
+
+options = {
+  :environments => %w[ default development ]
+}
+
+args = OptionParser.new do |parser|
+  parser.banner = "Usage: dbx [options] command"
+
+  parser.separator ""
+  parser.separator "Specific commands:"
+  
+  parser.separator "    %-32s %s" % [ 'schema', 'Display schema for database' ]
+  parser.separator "    %-32s %s" % [ 'dump', 'Dump the contents of the database' ]
+  parser.separator "    %-32s %s" % [ 'restore', 'Restore the contents of the database' ]
+
+  parser.separator ""
+  parser.separator "Specific options:"
+
+  parser.on('-e', '--env=s', 'Which environment(s) to use (Default: default,development)') do |s|
+    options[:environments] = s.split(/\s+,\s+/)
+  end
+  parser.on('-f', '--file=s', 'File to use for input or output') do |s|
+    options[:file] = s
+  end
+  parser.on('-f', '--config=s', 'Specify an alternate configuration file') do |s|
+    options[:config] = File.expand_path(s, Dir.pwd)
+  end
+  parser.on('--verbose', 'Verbose mode') do
+    options[:verbose] = true
+  end
+  parser.on('-v', '--version', 'Display version number') do
+    show_version
+    exit(0)
+  end
+  parser.on('-t', '--trace', 'Show full stack trace with exceptions') do
+    options[:trace] = true
+  end
+  parser.on('-h', '--help', 'Show this help') do
+    puts parser
+    exit(0)
+  end
+end.parse!
+
+options[:config] ||= find_config
+
+unless (File.exist?(options[:config]))
+  STDERR.puts "Could not read #{options[:config].inspect}"
+  exit(-10)
+end
+
+config_data = read_config(options[:config])
+
+unless (config_data)
+  STDERR.puts "Configuration file #{options[:config].inspect} is empty."
+  exit(-11)
+end
+
+config = nil
+environment = nil
+
+options[:environments].each do |env|
+  if (config = config_data[env])
+    config = DBX::Support.symbolize_keys(config)
+    
+    environment = env
+
+    break
+  end
+end
+
+config['adapter'] ||= 'mysql2'
+
+begin
+  args.each do |arg|
+    case (arg)
+    when 'schema'
+    when 'dump'
+    when 'restore'
+    when 'databases'
+      dbx = DBX.connect(config)
+      databases = dbx.databases
+    
+      databases.each do |database_name, database|
+        puts database.name
+      end
+    when 'config'
+      puts "Configuration read for environment '#{environment}'"
+      config.each do |key, value|
+        puts "\t#{key}: #{value}"
+      end
+      puts "(From: #{options[:config]})"
+    else
+      show_version
+      puts "Invalid command: #{arg}"
+      exit(-1)
+    end
+  end
+rescue Mysql2::Error => e
+  puts "[#{e.class}] #{e}"
+  exit(-127)
+end

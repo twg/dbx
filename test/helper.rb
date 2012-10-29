@@ -21,17 +21,16 @@ require 'yaml'
 class Test::Unit::TestCase
   def database_config(section)
     @test_config ||= begin
-      YAML.load(
-        File.open(
-          File.expand_path('config/database.yml', File.dirname(__FILE__))
+      config = 
+        YAML.load(
+          File.open(
+            File.expand_path('config/database.yml', File.dirname(__FILE__))
+          )
         )
-      )
+      
+      config and DBX::Support.symbolize_keys(config)
     end
     
-    @test_config and Hash[
-      @test_config[section.to_s].collect do |k, v|
-        [ k.to_sym, v ]
-      end
-    ]
+    @test_config[section]
   end
 end
